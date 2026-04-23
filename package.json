@@ -1,0 +1,50 @@
+{
+  "name": "oxlint-plugin-fsd",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Feature-Sliced Design rules for Oxlint JS plugins",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "lint": "oxlint src scripts test/rules test/utils vitest.config.ts test/smoke-oxlint.mjs test/fixtures-manifest.mjs",
+    "format": "prettier --write . --cache",
+    "check-formatting": "prettier --check . --cache",
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "test": "pnpm build && vitest run",
+    "test:smoke": "pnpm build && node ./test/smoke-oxlint.mjs",
+    "bench": "pnpm build && node ./scripts/bench-oxlint.mjs"
+  },
+  "dependencies": {
+    "@oxlint/plugins": "^1.61.0",
+    "tsconfck": "^3.1.6"
+  },
+  "peerDependencies": {
+    "eslint": ">=9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@typescript/native-preview": "7.0.0-dev.20260421.2",
+    "eslint": "^9.39.2",
+    "oxlint": "^1.61.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@10.25.0"
+}

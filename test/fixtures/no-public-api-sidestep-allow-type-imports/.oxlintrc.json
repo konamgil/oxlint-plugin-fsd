@@ -1,0 +1,13 @@
+{
+  "jsPlugins": [
+    "../../../dist/index.js"
+  ],
+  "rules": {
+    "fsd/no-public-api-sidestep": [
+      "error",
+      {
+        "allowTypeImports": true
+      }
+    ]
+  }
+}

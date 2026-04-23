@@ -1,0 +1,1 @@
+export const userProductBridge = "bridge";

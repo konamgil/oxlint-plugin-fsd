@@ -1,0 +1,8 @@
+{
+  "jsPlugins": [
+    "../../../dist/index.js"
+  ],
+  "rules": {
+    "fsd/no-cross-slice-dependency": "error"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "jsPlugins": [
+    "../../../dist/index.js"
+  ],
+  "rules": {
+    "fsd/no-global-store-imports": [
+      "error",
+      {
+        "allowedPaths": [
+          "/shared/store/hooks"
+        ]
+      }
+    ]
+  }
+}

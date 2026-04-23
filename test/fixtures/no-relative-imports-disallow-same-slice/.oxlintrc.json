@@ -1,0 +1,13 @@
+{
+  "jsPlugins": [
+    "../../../dist/index.js"
+  ],
+  "rules": {
+    "fsd/no-relative-imports": [
+      "error",
+      {
+        "allowSameSlice": false
+      }
+    ]
+  }
+}

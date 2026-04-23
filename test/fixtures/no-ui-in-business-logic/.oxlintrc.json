@@ -1,0 +1,8 @@
+{
+  "jsPlugins": [
+    "../../../dist/index.js"
+  ],
+  "rules": {
+    "fsd/no-ui-in-business-logic": "error"
+  }
+}

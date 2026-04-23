@@ -1,0 +1,14 @@
+{
+  "jsPlugins": [
+    "../../../dist/index.js"
+  ],
+  "rules": {
+    "fsd/ordered-imports": [
+      "error",
+      {
+        "groups": ["external", "shared", "features", "pages", "relative"],
+        "separators": true
+      }
+    ]
+  }
+}

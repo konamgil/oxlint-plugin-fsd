@@ -1,0 +1,8 @@
+{
+  "jsPlugins": [
+    "../../../dist/index.js"
+  ],
+  "rules": {
+    "fsd/forbidden-imports": "error"
+  }
+}
