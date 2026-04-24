@@ -1,7 +1,7 @@
 {
-  "name": "oxlint-plugin-fsd",
+  "name": "@konamgil/oxlint-plugin-fsd",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "description": "Feature-Sliced Design rules for Oxlint JS plugins",
   "license": "MIT",
   "type": "module",
@@ -16,6 +16,10 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
