@@ -80,12 +80,14 @@ export interface NoPublicApiSidestepOptions {
   testFilesPatterns?: string[];
   ignoreImportPatterns?: string[];
   allowTypeImports?: boolean;
+  sharedPublicApiSegments?: string[] | "*";
 }
 
 export interface NoPublicApiSidestepConfig extends ForbiddenImportsConfig {
   restrictedLayers: string[];
   publicApiFiles: string[];
   allowTypeImports: boolean;
+  sharedPublicApiSegments: readonly string[] | "*";
 }
 
 export interface NoCrossSliceDependencyOptions extends ForbiddenImportsOptions {
@@ -122,6 +124,45 @@ export interface NoGlobalStoreImportsConfig {
   forbiddenPaths: string[];
   allowedPaths: string[];
   testFilesPatterns: string[];
+}
+
+export interface BackendBoundaryLayerConfig {
+  allowedToImport?: string[];
+}
+
+export interface BackendBoundariesOptions {
+  alias?:
+    | string
+    | {
+        value: string;
+        withSlash?: boolean;
+      };
+  sourceRootPattern?: string;
+  modulesDir?: string;
+  moduleLayers?: string[];
+  topLevelLayers?: string[];
+  layers?: Record<string, BackendBoundaryLayerConfig>;
+  publicApiPatterns?: string[];
+  enforceCrossModulePublicApi?: boolean;
+  allowSameModuleSameLayer?: boolean;
+  testFilesPatterns?: string[];
+  ignoreImportPatterns?: string[];
+  allowTypeImports?: boolean;
+}
+
+export interface BackendBoundariesConfig {
+  alias: AliasConfig;
+  sourceRootPattern: string;
+  modulesDir: string;
+  moduleLayers: string[];
+  topLevelLayers: string[];
+  layers: Record<string, Required<BackendBoundaryLayerConfig>>;
+  publicApiPatterns: string[];
+  enforceCrossModulePublicApi: boolean;
+  allowSameModuleSameLayer: boolean;
+  testFilesPatterns: string[];
+  ignoreImportPatterns: string[];
+  allowTypeImports: boolean;
 }
 
 export interface OrderedImportsOptions {

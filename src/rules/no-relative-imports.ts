@@ -1,23 +1,39 @@
-import type { Context, ESTree, Rule } from "@oxlint/plugins";
-
 import type { NoRelativeImportsOptions } from "../types.js";
-import { getRuleOptions } from "../utils/options.js";
+import { createImportRule } from "../utils/create-import-rule.js";
 import {
-  compileRegexList,
   getSliceBoundary,
   isRelativeImportPath,
   isSameSliceImport,
-  matchesAnyRegex,
-  normalizePath,
 } from "../utils/path.js";
 
 type MessageIds = "noRelativeImport";
 
-function getFilename(context: Context): string {
-  return normalizePath(context.filename || context.getFilename());
+interface NoRelativeImportsConfig {
+  readonly allowSameSlice: boolean;
+  readonly allowTypeImports: boolean;
+  readonly testFilesPatterns: readonly string[];
+  readonly ignoreImportPatterns: readonly string[];
+  readonly layers: readonly string[] | undefined;
+  readonly singleLayerModules: readonly string[] | undefined;
 }
 
-export const noRelativeImportsRule: Rule = {
+function mergeNoRelativeImportsConfig(
+  options: NoRelativeImportsOptions = {},
+): NoRelativeImportsConfig {
+  return {
+    allowSameSlice: options.allowSameSlice ?? true,
+    allowTypeImports: options.allowTypeImports ?? false,
+    testFilesPatterns: options.testFilesPatterns ?? [],
+    ignoreImportPatterns: options.ignoreImportPatterns ?? [],
+    layers: options.layers,
+    singleLayerModules: options.singleLayerModules,
+  };
+}
+
+export const noRelativeImportsRule = createImportRule<
+  NoRelativeImportsOptions,
+  NoRelativeImportsConfig
+>({
   meta: {
     type: "problem",
     docs: {
@@ -56,71 +72,35 @@ export const noRelativeImportsRule: Rule = {
         "Relative imports cannot cross slice boundaries. Use an absolute import through the slice public API instead.",
     },
   },
-  createOnce(context) {
-    let options: NoRelativeImportsOptions = {};
-    let allowSameSlice = options.allowSameSlice ?? true;
-    let allowTypeImports = options.allowTypeImports ?? false;
-    let ignoreImportRegexes = compileRegexList(options.ignoreImportPatterns ?? []);
-    let testFileRegexes = compileRegexList(options.testFilesPatterns ?? []);
-
-    let filePath = "";
-    let shouldRunOnFile = false;
-
-    function shouldReportRelativeImport(importPath: unknown, importKind?: string): boolean {
-      if (!shouldRunOnFile || !isRelativeImportPath(importPath)) {
-        return false;
-      }
-
-      if (matchesAnyRegex(importPath, ignoreImportRegexes)) {
-        return false;
-      }
-
-      if (allowTypeImports && importKind === "type") {
-        return false;
-      }
-
-      if (allowSameSlice && isSameSliceImport(filePath, importPath, options)) {
-        return false;
-      }
-
-      return true;
+  mergeConfig: mergeNoRelativeImportsConfig,
+  shouldSkipFile({ config, filePath }) {
+    return (
+      getSliceBoundary(filePath, {
+        layers: config.layers ? [...config.layers] : undefined,
+        singleLayerModules: config.singleLayerModules
+          ? [...config.singleLayerModules]
+          : undefined,
+      }) === null
+    );
+  },
+  checkImport({ context, config, filePath, node, importPath, isTypeImport }) {
+    if (!isRelativeImportPath(importPath)) return;
+    if (config.allowTypeImports && isTypeImport) return;
+    if (
+      config.allowSameSlice &&
+      isSameSliceImport(filePath, importPath, {
+        layers: config.layers ? [...config.layers] : undefined,
+        singleLayerModules: config.singleLayerModules
+          ? [...config.singleLayerModules]
+          : undefined,
+      })
+    ) {
+      return;
     }
 
-    return {
-      before() {
-        options = getRuleOptions<NoRelativeImportsOptions>(context);
-        allowSameSlice = options.allowSameSlice ?? true;
-        allowTypeImports = options.allowTypeImports ?? false;
-        ignoreImportRegexes = compileRegexList(options.ignoreImportPatterns ?? []);
-        testFileRegexes = compileRegexList(options.testFilesPatterns ?? []);
-        filePath = getFilename(context);
-        shouldRunOnFile =
-          !matchesAnyRegex(filePath, testFileRegexes) &&
-          getSliceBoundary(filePath, options) !== null;
-
-        return shouldRunOnFile;
-      },
-      ImportDeclaration(node: ESTree.ImportDeclaration) {
-        if (shouldReportRelativeImport(node.source.value, node.importKind)) {
-          context.report({
-            node,
-            messageId: "noRelativeImport" satisfies MessageIds,
-          });
-        }
-      },
-      ImportExpression(node: ESTree.ImportExpression) {
-        const source = node.source;
-        if (
-          source.type === "Literal" &&
-          typeof source.value === "string" &&
-          shouldReportRelativeImport(source.value)
-        ) {
-          context.report({
-            node: source,
-            messageId: "noRelativeImport" satisfies MessageIds,
-          });
-        }
-      },
-    };
+    context.report({
+      node,
+      messageId: "noRelativeImport" satisfies MessageIds,
+    });
   },
-};
+});

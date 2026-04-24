@@ -1,6 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { noCrossSliceDependencyRule } from "./rules/no-cross-slice-dependency.js";
+import { backendBoundariesRule } from "./rules/backend-boundaries.js";
 import { forbiddenImportsRule } from "./rules/forbidden-imports.js";
 import { noGlobalStoreImportsRule } from "./rules/no-global-store-imports.js";
 import { orderedImportsRule } from "./rules/ordered-imports.js";
@@ -10,6 +11,7 @@ import { noUiInBusinessLogicRule } from "./rules/no-ui-in-business-logic.js";
 
 export const rules = {
   "no-cross-slice-dependency": noCrossSliceDependencyRule,
+  "backend-boundaries": backendBoundariesRule,
   "forbidden-imports": forbiddenImportsRule,
   "no-global-store-imports": noGlobalStoreImportsRule,
   "ordered-imports": orderedImportsRule,
@@ -50,6 +52,11 @@ export const configs = {
       "fsd/no-public-api-sidestep": "warn",
       "fsd/no-relative-imports": "off",
       "fsd/no-ui-in-business-logic": "error",
+    },
+  },
+  backend: {
+    rules: {
+      "fsd/backend-boundaries": "error",
     },
   },
 };

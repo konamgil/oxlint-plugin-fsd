@@ -1,28 +1,22 @@
-import type { Context, ESTree, Rule } from "@oxlint/plugins";
-
 import type { ForbiddenImportsOptions } from "../types.js";
 import { mergeForbiddenImportsConfig } from "../utils/config.js";
-import { getRuleOptions } from "../utils/options.js";
+import { createImportRule } from "../utils/create-import-rule.js";
 import {
-  compileRegexList,
-  isCrossImportPublicApiImportPath,
   extractLayerFromImportPath,
   extractLayerFromPath,
   extractSliceFromImportPath,
   extractSliceFromPath,
-  matchesAnyRegex,
-  normalizePath,
+  isCrossImportPublicApiImportPath,
   isCrossImportPublicApiPath,
 } from "../utils/path.js";
 import { resolveImportPath } from "../utils/resolve.js";
 
 type MessageIds = "invalidImport";
 
-function getFilename(context: Context): string {
-  return normalizePath(context.filename || context.getFilename());
-}
-
-export const forbiddenImportsRule: Rule = {
+export const forbiddenImportsRule = createImportRule<
+  ForbiddenImportsOptions,
+  ReturnType<typeof mergeForbiddenImportsConfig>
+>({
   meta: {
     type: "problem",
     docs: {
@@ -89,104 +83,53 @@ export const forbiddenImportsRule: Rule = {
       },
     ],
   },
-  createOnce(context) {
-    let config = mergeForbiddenImportsConfig();
-    let testFileRegexes = compileRegexList(config.testFilesPatterns);
-    let ignoredImportRegexes = compileRegexList(config.ignoreImportPatterns);
+  mergeConfig: mergeForbiddenImportsConfig,
+  shouldSkipFile({ config, filePath }) {
+    return extractLayerFromPath(filePath, config) === null;
+  },
+  checkImport({ context, config, filePath, node, importPath }) {
+    const fromLayer = extractLayerFromPath(filePath, config);
+    if (!fromLayer) return;
+    const fromSlice = extractSliceFromPath(filePath, config);
 
-    let filePath = "";
-    let fromLayer: string | null = null;
-    let fromSlice: string | null = null;
-
-    function reportIfForbidden(
-      node: ESTree.Node,
-      importPath: string,
-      messageNode: ESTree.Node = node,
-    ): void {
-      if (!fromLayer || matchesAnyRegex(importPath, ignoredImportRegexes)) {
-        return;
-      }
-
-      if (fromSlice && isCrossImportPublicApiImportPath(importPath, fromSlice, config)) {
-        return;
-      }
-
-      const importLayer = extractLayerFromImportPath(importPath, config);
-      const importSlice = extractSliceFromImportPath(importPath, config);
-      if (importLayer === fromLayer && importSlice === fromSlice) {
-        return;
-      }
-
-      const resolvedImportPath = resolveImportPath(importPath, filePath);
-      const toLayer =
-        (resolvedImportPath ? extractLayerFromPath(resolvedImportPath, config) : null) ??
-        extractLayerFromImportPath(importPath, config);
-      if (!toLayer) {
-        return;
-      }
-
-      if (resolvedImportPath && fromSlice) {
-        const toSlice = extractSliceFromPath(resolvedImportPath, config);
-
-        if (toLayer === fromLayer && toSlice === fromSlice) {
-          return;
-        }
-
-        if (
-          toLayer === fromLayer &&
-          toSlice &&
-          toSlice !== fromSlice &&
-          isCrossImportPublicApiPath(resolvedImportPath, fromSlice, config)
-        ) {
-          return;
-        }
-      }
-
-      const fromLayerConfig = config.layers[fromLayer];
-      const allowedToImport = fromLayerConfig?.allowedToImport ?? [];
-      if (allowedToImport.includes(toLayer)) {
-        return;
-      }
-
-      context.report({
-        node: messageNode,
-        messageId: "invalidImport" satisfies MessageIds,
-        data: {
-          fromLayer,
-          toLayer,
-          allowedLayers: allowedToImport.length > 0 ? allowedToImport.join(", ") : "(none)",
-        },
-      });
+    if (fromSlice && isCrossImportPublicApiImportPath(importPath, fromSlice, config)) {
+      return;
     }
 
-    return {
-      before() {
-        const options = getRuleOptions<ForbiddenImportsOptions>(context);
-        config = mergeForbiddenImportsConfig(options);
-        testFileRegexes = compileRegexList(config.testFilesPatterns);
-        ignoredImportRegexes = compileRegexList(config.ignoreImportPatterns);
-        filePath = getFilename(context);
-        if (matchesAnyRegex(filePath, testFileRegexes)) {
-          fromLayer = null;
-          fromSlice = null;
-          return false;
-        }
+    const importLayer = extractLayerFromImportPath(importPath, config);
+    const importSlice = extractSliceFromImportPath(importPath, config);
+    if (importLayer === fromLayer && importSlice === fromSlice) return;
 
-        fromLayer = extractLayerFromPath(filePath, config);
-        fromSlice = fromLayer ? extractSliceFromPath(filePath, config) : null;
-        return fromLayer !== null;
+    const resolvedImportPath = resolveImportPath(importPath, filePath);
+    const toLayer =
+      (resolvedImportPath ? extractLayerFromPath(resolvedImportPath, config) : null) ??
+      extractLayerFromImportPath(importPath, config);
+    if (!toLayer) return;
+
+    if (resolvedImportPath && fromSlice) {
+      const toSlice = extractSliceFromPath(resolvedImportPath, config);
+      if (toLayer === fromLayer && toSlice === fromSlice) return;
+      if (
+        toLayer === fromLayer &&
+        toSlice &&
+        toSlice !== fromSlice &&
+        isCrossImportPublicApiPath(resolvedImportPath, fromSlice, config)
+      ) {
+        return;
+      }
+    }
+
+    const allowedToImport = config.layers[fromLayer]?.allowedToImport ?? [];
+    if (allowedToImport.includes(toLayer)) return;
+
+    context.report({
+      node,
+      messageId: "invalidImport" satisfies MessageIds,
+      data: {
+        fromLayer,
+        toLayer,
+        allowedLayers: allowedToImport.length > 0 ? allowedToImport.join(", ") : "(none)",
       },
-      ImportDeclaration(node: ESTree.ImportDeclaration) {
-        if (typeof node.source.value === "string") {
-          reportIfForbidden(node, node.source.value, node);
-        }
-      },
-      ImportExpression(node: ESTree.ImportExpression) {
-        const source = node.source;
-        if (source.type === "Literal" && typeof source.value === "string") {
-          reportIfForbidden(node, source.value, source);
-        }
-      },
-    };
+    });
   },
-};
+});

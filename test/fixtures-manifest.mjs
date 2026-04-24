@@ -218,4 +218,20 @@ export const fixtureManifest = [
     expectedDiagnostics: 1,
     expectedCodes: ["fsd(no-ui-in-business-logic)"],
   },
+  {
+    name: "backend-boundaries",
+    configPath: fixturePath("backend-boundaries", ".oxlintrc.json"),
+    targetPath: fixturePath("backend-boundaries", "src"),
+    expectedStatus: "invalid",
+    expectedDiagnostics: 7,
+    expectedCodes: [
+      "fsd(backend-boundaries)",
+      "fsd(backend-boundaries)",
+      "fsd(backend-boundaries)",
+      "fsd(backend-boundaries)",
+      "fsd(backend-boundaries)",
+      "fsd(backend-boundaries)",
+      "fsd(backend-boundaries)",
+    ],
+  },
 ];

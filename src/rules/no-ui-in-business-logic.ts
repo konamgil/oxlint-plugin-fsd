@@ -1,25 +1,19 @@
-import type { Context, ESTree, Rule } from "@oxlint/plugins";
-
 import type { NoUiInBusinessLogicOptions } from "../types.js";
 import { mergeNoUiInBusinessLogicConfig } from "../utils/config.js";
-import { getRuleOptions } from "../utils/options.js";
+import { createImportRule } from "../utils/create-import-rule.js";
 import {
-  compileRegexList,
   extractSegmentFromImportPath,
   extractSegmentFromPath,
   isRelativeImportPath,
-  matchesAnyRegex,
-  normalizePath,
   resolveRelativeImport,
 } from "../utils/path.js";
 
 type MessageIds = "noUiInBusinessLogic";
 
-function getFilename(context: Context): string {
-  return normalizePath(context.filename || context.getFilename());
-}
-
-export const noUiInBusinessLogicRule: Rule = {
+export const noUiInBusinessLogicRule = createImportRule<
+  NoUiInBusinessLogicOptions,
+  ReturnType<typeof mergeNoUiInBusinessLogicConfig>
+>({
   meta: {
     type: "problem",
     docs: {
@@ -94,87 +88,37 @@ export const noUiInBusinessLogicRule: Rule = {
       },
     ],
   },
-  createOnce(context) {
-    let config = mergeNoUiInBusinessLogicConfig();
-    let testFileRegexes = compileRegexList(config.testFilesPatterns);
-    let ignoredImportRegexes = compileRegexList(config.ignoreImportPatterns);
-    let uiLayers = new Set(config.uiLayers);
-    let businessLogicLayers = new Set(config.businessLogicLayers);
+  mergeConfig: mergeNoUiInBusinessLogicConfig,
+  shouldSkipFile({ config, filePath }) {
+    const currentSegment = extractSegmentFromPath(filePath, config);
+    if (!currentSegment) return true;
+    return !config.businessLogicLayers.includes(currentSegment);
+  },
+  checkImport({ context, config, filePath, node, importPath }) {
+    const uiLayers = new Set(config.uiLayers);
 
-    let filePath = "";
-    let shouldRunOnFile = false;
-
-    function isUiImport(importPath: string): boolean {
-      const importText = `${importPath}`;
-
+    const isUiImport = (): boolean => {
       if (isRelativeImportPath(importPath)) {
-        const resolvedImportPath = resolveRelativeImport(filePath, importText);
+        const resolvedImportPath = resolveRelativeImport(filePath, importPath);
         const targetSegment = extractSegmentFromPath(resolvedImportPath, config);
         return targetSegment !== null && uiLayers.has(targetSegment);
       }
 
-      const targetSegment = extractSegmentFromImportPath(importText, config);
-      if (targetSegment && uiLayers.has(targetSegment)) {
-        return true;
-      }
+      const absoluteImport: string = importPath;
+      const targetSegment = extractSegmentFromImportPath(absoluteImport, config);
+      if (targetSegment && uiLayers.has(targetSegment)) return true;
 
       for (const segment of config.uiLayers) {
-        if (importText.includes(`/${segment}/`)) {
-          return true;
-        }
+        if (absoluteImport.includes(`/${segment}/`)) return true;
       }
-
       return false;
-    }
-
-    function handleImport(node: ESTree.Node, importPath: string): void {
-      if (
-        !shouldRunOnFile ||
-        matchesAnyRegex(importPath, ignoredImportRegexes) ||
-        !isUiImport(importPath)
-      ) {
-        return;
-      }
-
-      context.report({
-        node,
-        messageId: "noUiInBusinessLogic" satisfies MessageIds,
-      });
-    }
-
-    return {
-      before() {
-        const options = getRuleOptions<NoUiInBusinessLogicOptions>(context);
-        config = mergeNoUiInBusinessLogicConfig(options);
-        testFileRegexes = compileRegexList(config.testFilesPatterns);
-        ignoredImportRegexes = compileRegexList(config.ignoreImportPatterns);
-        uiLayers = new Set(config.uiLayers);
-        businessLogicLayers = new Set(config.businessLogicLayers);
-        filePath = getFilename(context);
-        if (matchesAnyRegex(filePath, testFileRegexes)) {
-          shouldRunOnFile = false;
-          return false;
-        }
-
-        const currentSegment = extractSegmentFromPath(filePath, config);
-        shouldRunOnFile = currentSegment !== null && businessLogicLayers.has(currentSegment);
-        return shouldRunOnFile;
-      },
-      ImportDeclaration(node: ESTree.ImportDeclaration) {
-        if (config.allowTypeImports && node.importKind === "type") {
-          return;
-        }
-
-        if (typeof node.source.value === "string") {
-          handleImport(node, node.source.value);
-        }
-      },
-      ImportExpression(node: ESTree.ImportExpression) {
-        const source = node.source;
-        if (source.type === "Literal" && typeof source.value === "string") {
-          handleImport(source, source.value);
-        }
-      },
     };
+
+    if (!isUiImport()) return;
+
+    context.report({
+      node,
+      messageId: "noUiInBusinessLogic" satisfies MessageIds,
+    });
   },
-};
+});

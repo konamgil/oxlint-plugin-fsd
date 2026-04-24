@@ -1,31 +1,25 @@
-import type { Context, ESTree, Rule } from "@oxlint/plugins";
-
 import type { NoCrossSliceDependencyOptions } from "../types.js";
 import { mergeNoCrossSliceDependencyConfig } from "../utils/config.js";
-import { getRuleOptions } from "../utils/options.js";
+import { createImportRule } from "../utils/create-import-rule.js";
 import {
-  compileRegexList,
-  isCrossImportPublicApiImportPath,
   extractLayerFromImportPath,
   extractLayerFromPath,
   extractSliceFromImportPath,
   extractSliceFromPath,
   getSliceBoundary,
-  isRelativeImportPath,
+  isCrossImportPublicApiImportPath,
   isCrossImportPublicApiPath,
-  matchesAnyRegex,
-  normalizePath,
+  isRelativeImportPath,
   resolveRelativeImport,
 } from "../utils/path.js";
 import { resolveImportPath } from "../utils/resolve.js";
 
 type MessageIds = "noFeatureDependency" | "noSliceDependency";
 
-function getFilename(context: Context): string {
-  return normalizePath(context.filename || context.getFilename());
-}
-
-export const noCrossSliceDependencyRule: Rule = {
+export const noCrossSliceDependencyRule = createImportRule<
+  NoCrossSliceDependencyOptions,
+  ReturnType<typeof mergeNoCrossSliceDependencyConfig>
+>({
   meta: {
     type: "problem",
     docs: {
@@ -99,30 +93,32 @@ export const noCrossSliceDependencyRule: Rule = {
       },
     ],
   },
-  createOnce(context) {
-    let config = mergeNoCrossSliceDependencyConfig();
-    let testFileRegexes = compileRegexList(config.testFilesPatterns);
-    let ignoredImportRegexes = compileRegexList(config.ignoreImportPatterns);
-    let excludedLayers = new Set(["shared", ...config.excludeLayers]);
+  mergeConfig: mergeNoCrossSliceDependencyConfig,
+  shouldSkipFile({ config, filePath }) {
+    const fromLayer = extractLayerFromPath(filePath, config);
+    if (!fromLayer) return true;
 
-    let filePath = "";
-    let fromLayer: string | null = null;
-    let fromSlice: string | null = null;
-    let shouldRunOnFile = false;
+    const excludedLayers = new Set(["shared", ...config.excludeLayers]);
+    if (excludedLayers.has(fromLayer)) return true;
 
-    function reportSliceDependency(node: ESTree.Node, toSlice: string): void {
-      if (!fromLayer || !fromSlice || toSlice === fromSlice) {
-        return;
-      }
+    if (config.featuresOnly && fromLayer !== "features") return true;
+
+    const fromSlice = extractSliceFromPath(filePath, config);
+    return !fromSlice;
+  },
+  checkImport({ context, config, filePath, node, importPath }) {
+    const fromLayer = extractLayerFromPath(filePath, config);
+    const fromSlice = extractSliceFromPath(filePath, config);
+    if (!fromLayer || !fromSlice) return;
+
+    const reportDependency = (toSlice: string): void => {
+      if (toSlice === fromSlice) return;
 
       if (fromLayer === "features" || config.featuresOnly) {
         context.report({
           node,
           messageId: "noFeatureDependency" satisfies MessageIds,
-          data: {
-            fromFeature: fromSlice,
-            toFeature: toSlice,
-          },
+          data: { fromFeature: fromSlice, toFeature: toSlice },
         });
         return;
       }
@@ -130,126 +126,44 @@ export const noCrossSliceDependencyRule: Rule = {
       context.report({
         node,
         messageId: "noSliceDependency" satisfies MessageIds,
-        data: {
-          layer: fromLayer,
-          fromSlice,
-          toSlice,
-        },
+        data: { layer: fromLayer, fromSlice, toSlice },
       });
-    }
+    };
 
-    function reportAbsoluteImport(node: ESTree.Node, importPath: string): void {
-      if (!fromLayer || !fromSlice) {
-        return;
-      }
-
-      const resolvedImportPath = resolveImportPath(importPath, filePath);
-      const toLayer =
-        (resolvedImportPath ? extractLayerFromPath(resolvedImportPath, config) : null) ??
-        extractLayerFromImportPath(importPath, config);
-      if (toLayer !== fromLayer) {
-        return;
-      }
-
-      const toSlice =
-        (resolvedImportPath ? extractSliceFromPath(resolvedImportPath, config) : null) ??
-        extractSliceFromImportPath(importPath, config);
-      if (!toSlice || toSlice === fromSlice) {
-        return;
-      }
-
-      if (isCrossImportPublicApiImportPath(importPath, fromSlice, config)) {
-        return;
-      }
-
-      if (
-        resolvedImportPath &&
-        isCrossImportPublicApiPath(resolvedImportPath, fromSlice, config)
-      ) {
-        return;
-      }
-
-      reportSliceDependency(node, toSlice);
-    }
-
-    function reportRelativeImport(node: ESTree.Node, importPath: string): void {
-      if (!fromLayer || !fromSlice) {
-        return;
-      }
-
+    if (isRelativeImportPath(importPath)) {
       const resolvedImportPath = resolveRelativeImport(filePath, importPath);
       const targetBoundary = getSliceBoundary(resolvedImportPath, {
         layers: Object.keys(config.layers),
         singleLayerModules: ["app", "shared"],
       });
-
-      if (!targetBoundary || targetBoundary.layer !== fromLayer || !targetBoundary.slice) {
+      if (
+        !targetBoundary ||
+        targetBoundary.layer !== fromLayer ||
+        !targetBoundary.slice ||
+        targetBoundary.slice === fromSlice
+      ) {
         return;
       }
-
-      if (targetBoundary.slice === fromSlice) {
-        return;
-      }
-
-      reportSliceDependency(node, targetBoundary.slice);
+      reportDependency(targetBoundary.slice);
+      return;
     }
 
-    function handleImport(node: ESTree.Node, importPath: string): void {
-      if (!shouldRunOnFile || matchesAnyRegex(importPath, ignoredImportRegexes)) {
-        return;
-      }
+    const resolvedImportPath = resolveImportPath(importPath, filePath);
+    const toLayer =
+      (resolvedImportPath ? extractLayerFromPath(resolvedImportPath, config) : null) ??
+      extractLayerFromImportPath(importPath, config);
+    if (toLayer !== fromLayer) return;
 
-      if (isRelativeImportPath(importPath)) {
-        reportRelativeImport(node, importPath);
-        return;
-      }
+    const toSlice =
+      (resolvedImportPath ? extractSliceFromPath(resolvedImportPath, config) : null) ??
+      extractSliceFromImportPath(importPath, config);
+    if (!toSlice || toSlice === fromSlice) return;
 
-      reportAbsoluteImport(node, importPath);
+    if (isCrossImportPublicApiImportPath(importPath, fromSlice, config)) return;
+    if (resolvedImportPath && isCrossImportPublicApiPath(resolvedImportPath, fromSlice, config)) {
+      return;
     }
 
-    return {
-      before() {
-        const options = getRuleOptions<NoCrossSliceDependencyOptions>(context);
-        config = mergeNoCrossSliceDependencyConfig(options);
-        testFileRegexes = compileRegexList(config.testFilesPatterns);
-        ignoredImportRegexes = compileRegexList(config.ignoreImportPatterns);
-        excludedLayers = new Set(["shared", ...config.excludeLayers]);
-        filePath = getFilename(context);
-        if (matchesAnyRegex(filePath, testFileRegexes)) {
-          shouldRunOnFile = false;
-          return false;
-        }
-
-        fromLayer = extractLayerFromPath(filePath, config);
-        if (!fromLayer || excludedLayers.has(fromLayer)) {
-          shouldRunOnFile = false;
-          return false;
-        }
-
-        if (config.featuresOnly && fromLayer !== "features") {
-          shouldRunOnFile = false;
-          return false;
-        }
-
-        fromSlice = extractSliceFromPath(filePath, config);
-        shouldRunOnFile = Boolean(fromSlice);
-        return shouldRunOnFile;
-      },
-      ImportDeclaration(node: ESTree.ImportDeclaration) {
-        if (config.allowTypeImports && node.importKind === "type") {
-          return;
-        }
-
-        if (typeof node.source.value === "string") {
-          handleImport(node, node.source.value);
-        }
-      },
-      ImportExpression(node: ESTree.ImportExpression) {
-        const source = node.source;
-        if (source.type === "Literal" && typeof source.value === "string") {
-          handleImport(source, source.value);
-        }
-      },
-    };
+    reportDependency(toSlice);
   },
-};
+});

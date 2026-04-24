@@ -1,5 +1,8 @@
 import type {
   AliasConfig,
+  BackendBoundariesConfig,
+  BackendBoundariesOptions,
+  BackendBoundaryLayerConfig,
   ForbiddenImportsConfig,
   ForbiddenImportsOptions,
   LayerRuleConfig,
@@ -93,23 +96,73 @@ const DEFAULT_IMPORT_ORDER = [
   "entities",
   "shared",
 ];
-export function mergeForbiddenImportsConfig(
-  userConfig: ForbiddenImportsOptions = {},
-): ForbiddenImportsConfig {
-  let alias: AliasConfig;
-  if (!userConfig.alias) {
-    alias = DEFAULT_ALIAS;
-  } else if (typeof userConfig.alias === "string") {
-    alias = {
-      value: userConfig.alias,
-      withSlash: userConfig.alias.endsWith("/"),
-    };
-  } else {
-    alias = {
-      ...DEFAULT_ALIAS,
-      ...userConfig.alias,
+
+const DEFAULT_BACKEND_MODULE_LAYERS = ["api", "application", "domain", "infra"];
+const DEFAULT_BACKEND_TOP_LEVEL_LAYERS = ["core", "shared"];
+const DEFAULT_BACKEND_LAYERS: Record<string, Required<BackendBoundaryLayerConfig>> = {
+  "module-api": {
+    allowedToImport: ["module-application", "core", "shared"],
+  },
+  "module-application": {
+    allowedToImport: ["module-application", "module-domain", "core", "shared"],
+  },
+  "module-domain": {
+    allowedToImport: ["module-domain", "shared"],
+  },
+  "module-infra": {
+    allowedToImport: ["module-application", "module-domain", "module-infra", "core", "shared"],
+  },
+  core: {
+    allowedToImport: ["core", "shared"],
+  },
+  shared: {
+    allowedToImport: ["shared"],
+  },
+};
+const DEFAULT_BACKEND_PUBLIC_API_PATTERNS = [
+  "^application(?:/index(?:\\.[cm]?[jt]sx?)?)?$",
+  "^infra(?:/index(?:\\.[cm]?[jt]sx?)?)?$",
+  "^[^/]+\\.module(?:\\.[cm]?ts)?$",
+  "^[^/]+\\.service(?:\\.[cm]?ts)?$",
+];
+
+function memoizeByOptions<T extends object, R extends object>(
+  compute: (input: T | undefined) => R,
+): (input?: T) => R {
+  const cache = new WeakMap<object, R>();
+  const defaultKey: object = Object.freeze({});
+  return (input?: T): R => {
+    const key: object = input ?? defaultKey;
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const result = compute(input);
+    cache.set(key, result);
+    return result;
+  };
+}
+
+function normalizeAliasInput(input: ForbiddenImportsOptions["alias"]): AliasConfig {
+  if (input == null) return DEFAULT_ALIAS;
+  if (typeof input === "string") {
+    const endsWithSlash = input.endsWith("/");
+    return {
+      value: endsWithSlash ? input.slice(0, -1) : input,
+      withSlash: endsWithSlash,
     };
   }
+  const rawValue = input.value ?? DEFAULT_ALIAS.value;
+  const endsWithSlash = rawValue.endsWith("/");
+  const value = endsWithSlash ? rawValue.slice(0, -1) : rawValue;
+  return {
+    value,
+    withSlash: input.withSlash ?? endsWithSlash,
+  };
+}
+
+function mergeForbiddenImportsConfigImpl(
+  userConfig: ForbiddenImportsOptions = {},
+): ForbiddenImportsConfig {
+  const alias = normalizeAliasInput(userConfig.alias);
 
   const layers: Record<string, LayerRuleConfig> = { ...DEFAULT_LAYERS };
   if (userConfig.layers) {
@@ -141,7 +194,12 @@ export function mergeForbiddenImportsConfig(
   };
 }
 
-export function mergeNoPublicApiSidestepConfig(
+export const mergeForbiddenImportsConfig = memoizeByOptions<
+  ForbiddenImportsOptions,
+  ForbiddenImportsConfig
+>(mergeForbiddenImportsConfigImpl);
+
+function mergeNoPublicApiSidestepConfigImpl(
   userConfig: NoPublicApiSidestepOptions = {},
 ): NoPublicApiSidestepConfig {
   const baseConfig = mergeForbiddenImportsConfig({
@@ -150,19 +208,30 @@ export function mergeNoPublicApiSidestepConfig(
     ignoreImportPatterns: userConfig.ignoreImportPatterns,
   });
 
+  const sharedPublicApiSegments: readonly string[] | "*" =
+    userConfig.sharedPublicApiSegments == null
+      ? "*"
+      : userConfig.sharedPublicApiSegments === "*"
+        ? "*"
+        : [...userConfig.sharedPublicApiSegments];
+
   return {
     ...baseConfig,
-    restrictedLayers: userConfig.layers
-      ? [...userConfig.layers]
-      : [...DEFAULT_PUBLIC_API_LAYERS],
+    restrictedLayers: userConfig.layers ? [...userConfig.layers] : [...DEFAULT_PUBLIC_API_LAYERS],
     publicApiFiles: userConfig.publicApiFiles
       ? [...userConfig.publicApiFiles]
       : [...DEFAULT_PUBLIC_API_FILES],
     allowTypeImports: userConfig.allowTypeImports ?? false,
+    sharedPublicApiSegments,
   };
 }
 
-export function mergeNoCrossSliceDependencyConfig(
+export const mergeNoPublicApiSidestepConfig = memoizeByOptions<
+  NoPublicApiSidestepOptions,
+  NoPublicApiSidestepConfig
+>(mergeNoPublicApiSidestepConfigImpl);
+
+function mergeNoCrossSliceDependencyConfigImpl(
   userConfig: NoCrossSliceDependencyOptions = {},
 ): NoCrossSliceDependencyConfig {
   const baseConfig = mergeForbiddenImportsConfig(userConfig);
@@ -175,7 +244,12 @@ export function mergeNoCrossSliceDependencyConfig(
   };
 }
 
-export function mergeNoUiInBusinessLogicConfig(
+export const mergeNoCrossSliceDependencyConfig = memoizeByOptions<
+  NoCrossSliceDependencyOptions,
+  NoCrossSliceDependencyConfig
+>(mergeNoCrossSliceDependencyConfigImpl);
+
+function mergeNoUiInBusinessLogicConfigImpl(
   userConfig: NoUiInBusinessLogicOptions = {},
 ): NoUiInBusinessLogicConfig {
   const baseConfig = mergeForbiddenImportsConfig(userConfig);
@@ -190,7 +264,12 @@ export function mergeNoUiInBusinessLogicConfig(
   };
 }
 
-export function mergeNoGlobalStoreImportsConfig(
+export const mergeNoUiInBusinessLogicConfig = memoizeByOptions<
+  NoUiInBusinessLogicOptions,
+  NoUiInBusinessLogicConfig
+>(mergeNoUiInBusinessLogicConfigImpl);
+
+function mergeNoGlobalStoreImportsConfigImpl(
   userConfig: NoGlobalStoreImportsOptions = {},
 ): NoGlobalStoreImportsConfig {
   return {
@@ -204,7 +283,56 @@ export function mergeNoGlobalStoreImportsConfig(
   };
 }
 
-export function mergeOrderedImportsConfig(
+export const mergeNoGlobalStoreImportsConfig = memoizeByOptions<
+  NoGlobalStoreImportsOptions,
+  NoGlobalStoreImportsConfig
+>(mergeNoGlobalStoreImportsConfigImpl);
+
+function mergeBackendBoundariesConfigImpl(
+  userConfig: BackendBoundariesOptions = {},
+): BackendBoundariesConfig {
+  const layers: Record<string, Required<BackendBoundaryLayerConfig>> = {
+    ...DEFAULT_BACKEND_LAYERS,
+  };
+
+  if (userConfig.layers) {
+    for (const [key, value] of Object.entries(userConfig.layers)) {
+      layers[key] = {
+        allowedToImport: [...(value.allowedToImport ?? layers[key]?.allowedToImport ?? [])],
+      };
+    }
+  }
+
+  return {
+    alias: normalizeAliasInput(userConfig.alias),
+    sourceRootPattern: userConfig.sourceRootPattern ?? "/src/",
+    modulesDir: userConfig.modulesDir ?? "modules",
+    moduleLayers: userConfig.moduleLayers
+      ? [...userConfig.moduleLayers]
+      : [...DEFAULT_BACKEND_MODULE_LAYERS],
+    topLevelLayers: userConfig.topLevelLayers
+      ? [...userConfig.topLevelLayers]
+      : [...DEFAULT_BACKEND_TOP_LEVEL_LAYERS],
+    layers,
+    publicApiPatterns: userConfig.publicApiPatterns
+      ? [...userConfig.publicApiPatterns]
+      : [...DEFAULT_BACKEND_PUBLIC_API_PATTERNS],
+    enforceCrossModulePublicApi: userConfig.enforceCrossModulePublicApi ?? true,
+    allowSameModuleSameLayer: userConfig.allowSameModuleSameLayer ?? true,
+    testFilesPatterns: userConfig.testFilesPatterns
+      ? [...userConfig.testFilesPatterns]
+      : [...DEFAULT_TEST_FILE_PATTERNS],
+    ignoreImportPatterns: [...(userConfig.ignoreImportPatterns ?? [])],
+    allowTypeImports: userConfig.allowTypeImports ?? false,
+  };
+}
+
+export const mergeBackendBoundariesConfig = memoizeByOptions<
+  BackendBoundariesOptions,
+  BackendBoundariesConfig
+>(mergeBackendBoundariesConfigImpl);
+
+function mergeOrderedImportsConfigImpl(
   userConfig: OrderedImportsOptions = {},
 ): OrderedImportsConfig {
   const baseConfig = mergeForbiddenImportsConfig({
@@ -215,7 +343,9 @@ export function mergeOrderedImportsConfig(
   const customOrder = userConfig.customOrder
     ? [...userConfig.customOrder]
     : [...DEFAULT_IMPORT_ORDER];
-  const rawGroups = userConfig.groups ? [...userConfig.groups] : ["external", ...customOrder, "relative"];
+  const rawGroups = userConfig.groups
+    ? [...userConfig.groups]
+    : ["external", ...customOrder, "relative"];
   const groups = [...rawGroups];
 
   for (const fallbackGroup of ["external", ...customOrder, "relative"]) {
@@ -231,3 +361,8 @@ export function mergeOrderedImportsConfig(
     separators: userConfig.separators ?? false,
   };
 }
+
+export const mergeOrderedImportsConfig = memoizeByOptions<
+  OrderedImportsOptions,
+  OrderedImportsConfig
+>(mergeOrderedImportsConfigImpl);

@@ -11,6 +11,7 @@ This package currently ships these rules:
 - `fsd/no-public-api-sidestep`
 - `fsd/no-relative-imports`
 - `fsd/no-ui-in-business-logic`
+- `fsd/backend-boundaries`
 
 This project now mirrors the original `eslint-plugin-fsd-lint` rule set with
 an Oxlint-first implementation.
@@ -67,6 +68,12 @@ autofix.
 `fsd/no-ui-in-business-logic` blocks `ui` imports from business-logic segments
 such as `model`, `api`, and `lib`.
 
+`fsd/backend-boundaries` enforces nested backend module boundaries such as
+`src/modules/<module>/{api,application,domain,infra}`, `src/core`, and
+`src/shared`. It also blocks cross-module deep imports unless the target is a
+configured public API such as `application/index.ts`, `infra/index.ts`, or a
+module root file.
+
 Allowed by default:
 
 - Relative imports within the same slice
@@ -88,6 +95,8 @@ Blocked by default:
 - `../ui/Button` from `model` or `lib`
 - `@/entities/user/ui/Card` from `model` or `api`
 - `shared` imports placed above `features`
+- `modules/foo/application/commands/internal` from another backend module
+- `modules/foo/infra/prisma/repository` from backend `application`
 
 ## Options
 
@@ -99,11 +108,27 @@ Blocked by default:
       {
         "allowSameSlice": true,
         "allowTypeImports": false,
-        "testFilesPatterns": [
-          "**/*.test.*",
-          "**/*.spec.*",
-          "**/*.stories.*"
-        ]
+        "testFilesPatterns": ["**/*.test.*", "**/*.spec.*", "**/*.stories.*"]
+      }
+    ]
+  }
+}
+```
+
+Backend usage:
+
+```json
+{
+  "rules": {
+    "fsd/backend-boundaries": [
+      "error",
+      {
+        "alias": {
+          "value": "@",
+          "withSlash": true
+        },
+        "sourceRootPattern": "/src/",
+        "modulesDir": "modules"
       }
     ]
   }
@@ -115,6 +140,7 @@ Blocked by default:
 - `configs.base`
 - `configs.recommended`
 - `configs.strict`
+- `configs.backend`
 
 ## Local development
 
@@ -151,6 +177,7 @@ The fixture suite covers:
 - referenced `tsconfig` path aliases
 - shared `lib` and shared `ui` public API behavior
 - ordered-import autofix and comment preservation
+- backend nested layer direction and cross-module public API checks
 
 ## CI
 
