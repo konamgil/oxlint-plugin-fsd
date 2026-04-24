@@ -1,4 +1,4 @@
-# @konamgil/oxlint-plugin-fsd
+# @mandujs/oxlint-plugin-fsd
 
 Oxlint JS plugin project for Feature-Sliced Design rules.
 
@@ -27,7 +27,7 @@ Quality gates in this package:
 ## Install
 
 ```bash
-pnpm add -D @konamgil/oxlint-plugin-fsd
+pnpm add -D @mandujs/oxlint-plugin-fsd
 ```
 
 ## Oxlint usage
@@ -37,7 +37,7 @@ pnpm add -D @konamgil/oxlint-plugin-fsd
   "jsPlugins": [
     {
       "name": "fsd",
-      "specifier": "@konamgil/oxlint-plugin-fsd"
+      "specifier": "@mandujs/oxlint-plugin-fsd"
     }
   ],
   "rules": {

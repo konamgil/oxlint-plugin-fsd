@@ -1,5 +1,5 @@
 {
-  "name": "@konamgil/oxlint-plugin-fsd",
+  "name": "@mandujs/oxlint-plugin-fsd",
   "version": "0.1.0",
   "private": false,
   "description": "Feature-Sliced Design rules for Oxlint JS plugins",
