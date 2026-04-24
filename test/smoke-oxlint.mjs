@@ -7,7 +7,7 @@ const oxlintEntrypoint = path.join(projectRoot, "node_modules", "oxlint", "bin",
 function runOxlint(configPath, targetPath) {
   const run = spawnSync(
     process.execPath,
-    [oxlintEntrypoint, "-c", configPath, targetPath, "--format", "json"],
+    [oxlintEntrypoint, "-c", configPath, targetPath, "--format", "json", "--threads=1"],
     {
       cwd: projectRoot,
       encoding: "utf8",
