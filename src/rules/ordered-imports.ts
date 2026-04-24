@@ -21,6 +21,10 @@ interface ImportChunk {
   isSideEffectOnly: boolean;
 }
 
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n/g, "\n");
+}
+
 function getFilename(context: Context): string {
   return normalizePath(context.filename || context.getFilename());
 }
@@ -131,7 +135,6 @@ export const orderedImportsRule: Rule = {
 
         const sourceCode = context.sourceCode || context.getSourceCode();
         const sourceText = sourceCode.text;
-        const endOfLine = sourceText.includes("\r\n") ? "\r\n" : "\n";
         const classifyImport = (_node: ESTree.ImportDeclaration, importPath: string): string => {
           if (isRelativeImportPath(importPath)) {
             return "relative";
@@ -170,6 +173,10 @@ export const orderedImportsRule: Rule = {
           }))
           .filter((entry) => entry.chunks.length > 0);
 
+        const firstImport = importNodes[0]!;
+        const lastImport = importNodes[importNodes.length - 1]!;
+        const originalImportText = sourceText.slice(firstImport.range[0], lastImport.range[1]);
+        const endOfLine = originalImportText.includes("\r\n") ? "\r\n" : "\n";
         const finalOrder = populatedGroups.flatMap((entry) => entry.chunks);
         const sortedImportText = config.separators
           ? populatedGroups
@@ -177,11 +184,10 @@ export const orderedImportsRule: Rule = {
               .join(`${endOfLine}${endOfLine}`)
           : buildImportBlock(finalOrder, endOfLine);
 
-        const firstImport = importNodes[0]!;
-        const lastImport = importNodes[importNodes.length - 1]!;
-        const originalImportText = sourceText.slice(firstImport.range[0], lastImport.range[1]);
-
-        if (originalImportText.trim() === sortedImportText.trim()) {
+        if (
+          normalizeLineEndings(originalImportText).trim() ===
+          normalizeLineEndings(sortedImportText).trim()
+        ) {
           return;
         }
 

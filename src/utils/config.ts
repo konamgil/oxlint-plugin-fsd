@@ -24,7 +24,7 @@ const DEFAULT_LAYERS: Record<string, LayerRuleConfig> = {
   app: {
     pattern: "app",
     priority: 1,
-    allowedToImport: ["processes", "pages", "widgets", "features", "entities", "shared"],
+    allowedToImport: ["app", "processes", "pages", "widgets", "features", "entities", "shared"],
   },
   processes: {
     pattern: "processes",
@@ -54,7 +54,7 @@ const DEFAULT_LAYERS: Record<string, LayerRuleConfig> = {
   shared: {
     pattern: "shared",
     priority: 7,
-    allowedToImport: [],
+    allowedToImport: ["shared"],
   },
 };
 

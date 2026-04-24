@@ -8,6 +8,7 @@ import {
   isCrossImportPublicApiImportPath,
   extractLayerFromImportPath,
   extractLayerFromPath,
+  extractSliceFromImportPath,
   extractSliceFromPath,
   matchesAnyRegex,
   normalizePath,
@@ -110,6 +111,12 @@ export const forbiddenImportsRule: Rule = {
         return;
       }
 
+      const importLayer = extractLayerFromImportPath(importPath, config);
+      const importSlice = extractSliceFromImportPath(importPath, config);
+      if (importLayer === fromLayer && importSlice === fromSlice) {
+        return;
+      }
+
       const resolvedImportPath = resolveImportPath(importPath, filePath);
       const toLayer =
         (resolvedImportPath ? extractLayerFromPath(resolvedImportPath, config) : null) ??
@@ -120,6 +127,11 @@ export const forbiddenImportsRule: Rule = {
 
       if (resolvedImportPath && fromSlice) {
         const toSlice = extractSliceFromPath(resolvedImportPath, config);
+
+        if (toLayer === fromLayer && toSlice === fromSlice) {
+          return;
+        }
+
         if (
           toLayer === fromLayer &&
           toSlice &&
