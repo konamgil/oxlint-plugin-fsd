@@ -104,13 +104,13 @@ const DEFAULT_BACKEND_LAYERS: Record<string, Required<BackendBoundaryLayerConfig
     allowedToImport: ["module-application", "core", "shared"],
   },
   "module-application": {
-    allowedToImport: ["module-application", "module-domain", "core", "shared"],
+    allowedToImport: ["module-domain", "core", "shared"],
   },
   "module-domain": {
     allowedToImport: ["module-domain", "shared"],
   },
   "module-infra": {
-    allowedToImport: ["module-application", "module-domain", "module-infra", "core", "shared"],
+    allowedToImport: ["module-application", "module-domain", "core", "shared"],
   },
   core: {
     allowedToImport: ["core", "shared"],

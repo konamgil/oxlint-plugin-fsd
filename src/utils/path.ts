@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import {
+  type AliasConfig,
   DEFAULT_FSD_LAYERS,
   DEFAULT_SINGLE_LAYER_MODULES,
   type ForbiddenImportsConfig,
@@ -60,7 +61,6 @@ function createLRU<K, V>(max: number): LRUCache<K, V> {
 }
 
 interface ConfigCache {
-  aliasPatterns: readonly string[];
   segmentToLayer: Map<string, string>;
   folderPatternRegex: RegExp | null;
   filePartsCache: LRUCache<string, PathParts | null>;
@@ -72,11 +72,6 @@ const configCacheStore = new WeakMap<ForbiddenImportsConfig, ConfigCache>();
 function getConfigCache(config: ForbiddenImportsConfig): ConfigCache {
   const cached = configCacheStore.get(config);
   if (cached) return cached;
-
-  const aliasPatterns: readonly string[] = [
-    config.alias.withSlash ? `${config.alias.value}/` : config.alias.value,
-    `${config.alias.value}/`,
-  ];
 
   const segmentToLayer = new Map<string, string>();
   for (const [layerKey, layerConfig] of Object.entries(config.layers)) {
@@ -97,7 +92,6 @@ function getConfigCache(config: ForbiddenImportsConfig): ConfigCache {
   }
 
   const entry: ConfigCache = {
-    aliasPatterns,
     segmentToLayer,
     folderPatternRegex,
     filePartsCache: createLRU<string, PathParts | null>(PATH_CACHE_SIZE),
@@ -138,11 +132,23 @@ function compileSingleRegex(pattern: string): RegExp {
 export function isRelativeImportPath(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    (value === "." ||
-      value === ".." ||
-      value.startsWith("./") ||
-      value.startsWith("../"))
+    (value === "." || value === ".." || value.startsWith("./") || value.startsWith("../"))
   );
+}
+
+export function getAliasRelativePath(importPath: string, alias: AliasConfig): string | null {
+  const normalizedImport = normalizePath(importPath);
+  const normalizedAlias = normalizePath(alias.value).replace(/\/$/, "");
+  const prefixes = alias.withSlash
+    ? [`${normalizedAlias}/`]
+    : [normalizedAlias, `${normalizedAlias}/`];
+
+  const matchingPrefix = prefixes.find((prefix) => normalizedImport.startsWith(prefix));
+  if (!matchingPrefix) return null;
+
+  let rest = normalizedImport.slice(matchingPrefix.length);
+  if (rest.startsWith("/")) rest = rest.slice(1);
+  return rest;
 }
 
 export function compileRegexList(patterns: readonly string[] = []): RegExp[] {
@@ -164,10 +170,7 @@ export function matchesAnyRegex(value: string, regexes: readonly RegExp[]): bool
   return false;
 }
 
-export function getRelativePathFromRoot(
-  filePath: string,
-  rootPattern = "/src/",
-): string | null {
+export function getRelativePathFromRoot(filePath: string, rootPattern = "/src/"): string | null {
   const normalizedPath = normalizePath(filePath);
   const rootIndex = normalizedPath.indexOf(rootPattern);
 
@@ -184,17 +187,9 @@ interface PathParts {
   layerIndex: number;
 }
 
-function stripAliasSegments(
-  normalizedImport: string,
-  aliasPatterns: readonly string[],
-): string[] | null {
-  const matchingPrefix = aliasPatterns.find((prefix) =>
-    normalizedImport.startsWith(prefix),
-  );
-  if (!matchingPrefix) return null;
-
-  let rest = normalizedImport.slice(matchingPrefix.length);
-  if (rest.startsWith("/")) rest = rest.slice(1);
+function stripAliasSegments(normalizedImport: string, alias: AliasConfig): string[] | null {
+  const rest = getAliasRelativePath(normalizedImport, alias);
+  if (rest === null) return null;
   return rest.split("/").filter(Boolean);
 }
 
@@ -210,7 +205,7 @@ function parseImportPathParts(
   }
 
   const normalized = normalizePath(importPath);
-  const segments = stripAliasSegments(normalized, cache.aliasPatterns);
+  const segments = stripAliasSegments(normalized, config.alias);
   let result: PathParts | null = null;
 
   if (segments && segments.length > 0) {
@@ -227,10 +222,7 @@ function parseImportPathParts(
   return result;
 }
 
-function parseFilePathParts(
-  filePath: string,
-  config: ForbiddenImportsConfig,
-): PathParts | null {
+function parseFilePathParts(filePath: string, config: ForbiddenImportsConfig): PathParts | null {
   const cache = getConfigCache(config);
   if (cache.filePartsCache.has(filePath)) {
     return cache.filePartsCache.get(filePath) ?? null;
@@ -398,9 +390,7 @@ export function getSliceBoundary(
   }
 
   const layers = new Set(options.layers ?? DEFAULT_FSD_LAYERS);
-  const singleLayerModules = new Set(
-    options.singleLayerModules ?? DEFAULT_SINGLE_LAYER_MODULES,
-  );
+  const singleLayerModules = new Set(options.singleLayerModules ?? DEFAULT_SINGLE_LAYER_MODULES);
 
   const layer = segments[0];
   if (!layer || !layers.has(layer)) {
@@ -419,10 +409,7 @@ export function getSliceBoundary(
   return { layer, slice };
 }
 
-export function resolveRelativeImport(
-  currentFilePath: string,
-  importPath: string,
-): string {
+export function resolveRelativeImport(currentFilePath: string, importPath: string): string {
   const normalizedFilePath = normalizePath(currentFilePath);
   const currentDir = path.posix.dirname(normalizedFilePath);
   return normalizePath(path.posix.resolve(currentDir, importPath));
@@ -446,7 +433,6 @@ export function isSameSliceImport(
   }
 
   return (
-    currentBoundary.layer === targetBoundary.layer &&
-    currentBoundary.slice === targetBoundary.slice
+    currentBoundary.layer === targetBoundary.layer && currentBoundary.slice === targetBoundary.slice
   );
 }

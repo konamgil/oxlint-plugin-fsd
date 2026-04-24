@@ -10,6 +10,7 @@ import {
   extractSliceFromImportPath,
   extractSliceFromPath,
   getRelativePathFromRoot,
+  getAliasRelativePath,
   getSliceBoundary,
   isCrossImportPublicApiImportPath,
   isCrossImportPublicApiPath,
@@ -72,6 +73,41 @@ describe("isRelativeImportPath", () => {
     expect(isRelativeImportPath(null)).toBe(false);
     expect(isRelativeImportPath(42)).toBe(false);
     expect(isRelativeImportPath(undefined)).toBe(false);
+  });
+});
+
+describe("getAliasRelativePath", () => {
+  it("strips plain aliases and slash aliases", () => {
+    expect(
+      getAliasRelativePath("@/modules/user/application", {
+        value: "@",
+        withSlash: true,
+      }),
+    ).toBe("modules/user/application");
+    expect(
+      getAliasRelativePath("~/features/auth", {
+        value: "~",
+        withSlash: false,
+      }),
+    ).toBe("features/auth");
+  });
+
+  it("normalizes Windows-style imports before stripping aliases", () => {
+    expect(
+      getAliasRelativePath("@\\modules\\user\\application", {
+        value: "@",
+        withSlash: true,
+      }),
+    ).toBe("modules/user/application");
+  });
+
+  it("rejects non-matching aliases", () => {
+    expect(
+      getAliasRelativePath("#/modules/user", {
+        value: "@",
+        withSlash: true,
+      }),
+    ).toBeNull();
   });
 });
 
@@ -164,9 +200,9 @@ describe("extractLayerFromPath / extractLayerFromImportPath", () => {
     });
 
     it("still works for non-prefixed folder when pattern enabled", () => {
-      expect(
-        extractLayerFromPath("/repo/src/features/auth/ui.ts", configWithFolderPattern),
-      ).toBe("features");
+      expect(extractLayerFromPath("/repo/src/features/auth/ui.ts", configWithFolderPattern)).toBe(
+        "features",
+      );
     });
   });
 
@@ -176,18 +212,14 @@ describe("extractLayerFromPath / extractLayerFromImportPath", () => {
     });
 
     it("normalizes alias with trailing slash (regression: was @// before)", () => {
-      expect(extractLayerFromImportPath("@/features/auth", configWithSlashAlias)).toBe(
-        "features",
-      );
+      expect(extractLayerFromImportPath("@/features/auth", configWithSlashAlias)).toBe("features");
     });
   });
 });
 
 describe("extractSliceFromPath / extractSliceFromImportPath", () => {
   it("extracts slice from file path", () => {
-    expect(extractSliceFromPath("/repo/src/features/auth/ui/Form.tsx", baseConfig)).toBe(
-      "auth",
-    );
+    expect(extractSliceFromPath("/repo/src/features/auth/ui/Form.tsx", baseConfig)).toBe("auth");
   });
 
   it("extracts slice from import path", () => {
@@ -201,9 +233,7 @@ describe("extractSliceFromPath / extractSliceFromImportPath", () => {
 
 describe("extractSegmentFromPath / extractSegmentFromImportPath", () => {
   it("extracts segment (slot after slice)", () => {
-    expect(extractSegmentFromPath("/repo/src/features/auth/ui/Form.tsx", baseConfig)).toBe(
-      "ui",
-    );
+    expect(extractSegmentFromPath("/repo/src/features/auth/ui/Form.tsx", baseConfig)).toBe("ui");
   });
 
   it("extracts segment from import path", () => {
@@ -259,15 +289,11 @@ describe("isSharedPublicApiPath", () => {
   });
 
   it("respects explicit allowed segments (deny config)", () => {
-    expect(isSharedPublicApiPath("/repo/src/shared/config/index.ts", ["ui", "lib"])).toBe(
-      false,
-    );
+    expect(isSharedPublicApiPath("/repo/src/shared/config/index.ts", ["ui", "lib"])).toBe(false);
   });
 
   it("rejects deep non-index paths", () => {
-    expect(isSharedPublicApiPath("/repo/src/shared/ui/Button/internal/helpers.ts")).toBe(
-      false,
-    );
+    expect(isSharedPublicApiPath("/repo/src/shared/ui/Button/internal/helpers.ts")).toBe(false);
   });
 
   it("rejects when not under shared", () => {
@@ -277,9 +303,10 @@ describe("isSharedPublicApiPath", () => {
 
 describe("getSliceBoundary", () => {
   it("returns layer+slice for standard layer", () => {
-    expect(
-      getSliceBoundary("/repo/src/features/auth/ui/Form.tsx", {}),
-    ).toEqual({ layer: "features", slice: "auth" });
+    expect(getSliceBoundary("/repo/src/features/auth/ui/Form.tsx", {})).toEqual({
+      layer: "features",
+      slice: "auth",
+    });
   });
 
   it("returns null slice for single-layer modules (app, shared)", () => {
@@ -308,23 +335,15 @@ describe("resolveRelativeImport + isSameSliceImport", () => {
   });
 
   it("detects same-slice relative import", () => {
-    expect(
-      isSameSliceImport(
-        "/repo/src/features/auth/ui/Form.tsx",
-        "../model/store",
-        {},
-      ),
-    ).toBe(true);
+    expect(isSameSliceImport("/repo/src/features/auth/ui/Form.tsx", "../model/store", {})).toBe(
+      true,
+    );
   });
 
   it("rejects cross-slice relative import", () => {
-    expect(
-      isSameSliceImport(
-        "/repo/src/features/auth/ui/Form.tsx",
-        "../../billing/api",
-        {},
-      ),
-    ).toBe(false);
+    expect(isSameSliceImport("/repo/src/features/auth/ui/Form.tsx", "../../billing/api", {})).toBe(
+      false,
+    );
   });
 });
 
@@ -351,9 +370,7 @@ describe("property: parseFilePathParts round-trip", () => {
         fc.stringMatching(/^[a-z][a-z0-9-]{0,15}$/),
         (consumerSlice, producerSlice) => {
           const resolvedPath = `/repo/src/features/${producerSlice}/@x/${consumerSlice}/index.ts`;
-          expect(
-            isCrossImportPublicApiPath(resolvedPath, consumerSlice, baseConfig),
-          ).toBe(true);
+          expect(isCrossImportPublicApiPath(resolvedPath, consumerSlice, baseConfig)).toBe(true);
         },
       ),
     );

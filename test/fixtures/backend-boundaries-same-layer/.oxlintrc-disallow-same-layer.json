@@ -1,0 +1,11 @@
+{
+  "jsPlugins": ["../../../dist/index.js"],
+  "rules": {
+    "fsd/backend-boundaries": [
+      "error",
+      {
+        "allowSameModuleSameLayer": false
+      }
+    ]
+  }
+}

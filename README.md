@@ -135,6 +135,32 @@ Backend usage:
 }
 ```
 
+Default backend layer policy:
+
+- `module-api` can import `module-application`, `core`, and `shared`.
+- `module-application` can import `module-domain`, `core`, and `shared`.
+- `module-domain` can import `module-domain` and `shared`.
+- `module-infra` can import `module-application`, `module-domain`, `core`,
+  and `shared`.
+- `core` can import `core` and `shared`.
+- `shared` can import `shared` only.
+
+Default backend public API patterns for cross-module imports:
+
+- `application` and `application/index.ts`
+- `infra` and `infra/index.ts`
+- module root `*.module.ts`
+- module root `*.service.ts`
+
+Useful backend options:
+
+- `enforceCrossModulePublicApi: false` disables cross-module public API checks
+  while keeping layer direction checks.
+- `allowSameModuleSameLayer: false` reports same-module same-layer imports
+  instead of allowing local layer internals.
+- `allowTypeImports: true` skips type-only imports.
+- `publicApiPatterns` replaces the default public API regex list.
+
 ## Presets
 
 - `configs.base`

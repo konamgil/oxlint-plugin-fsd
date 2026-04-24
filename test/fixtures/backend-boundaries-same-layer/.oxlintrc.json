@@ -1,0 +1,6 @@
+{
+  "jsPlugins": ["../../../dist/index.js"],
+  "rules": {
+    "fsd/backend-boundaries": "error"
+  }
+}

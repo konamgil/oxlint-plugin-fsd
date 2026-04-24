@@ -1,7 +1,12 @@
 import type { BackendBoundariesConfig, BackendBoundariesOptions } from "../types.js";
 import { mergeBackendBoundariesConfig } from "../utils/config.js";
 import { createImportRule } from "../utils/create-import-rule.js";
-import { compileRegexList, getRelativePathFromRoot, normalizePath } from "../utils/path.js";
+import {
+  compileRegexList,
+  getAliasRelativePath,
+  getRelativePathFromRoot,
+  normalizePath,
+} from "../utils/path.js";
 import { resolveImportPath } from "../utils/resolve.js";
 
 type MessageIds = "invalidLayerImport" | "invalidCrossModuleImport";
@@ -14,18 +19,6 @@ interface BackendElement {
 }
 
 const publicApiRegexCache = new WeakMap<BackendBoundariesConfig, RegExp[]>();
-
-function aliasRelativePath(importPath: string, config: BackendBoundariesConfig): string | null {
-  const normalizedImport = normalizePath(importPath);
-  const aliasValue = normalizePath(config.alias.value).replace(/\/$/, "");
-  const aliasPrefix = `${aliasValue}/`;
-
-  if (!normalizedImport.startsWith(aliasPrefix)) {
-    return null;
-  }
-
-  return normalizedImport.slice(aliasPrefix.length);
-}
 
 function parseElementFromRelativePath(
   relativePath: string,
@@ -80,7 +73,7 @@ function parseElementFromImportPath(
     return parseElementFromFilePath(resolvedImportPath, config);
   }
 
-  const relativePath = aliasRelativePath(importPath, config);
+  const relativePath = getAliasRelativePath(importPath, config.alias);
   if (!relativePath) return null;
 
   return parseElementFromRelativePath(relativePath, config);
